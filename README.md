@@ -1,6 +1,6 @@
 # Exam #1: "Last Race"
 
-**Student:** s352044 LASTNAME FIRSTNAME
+**Student:** s352044 Rai Aayush
 
 ---
 
