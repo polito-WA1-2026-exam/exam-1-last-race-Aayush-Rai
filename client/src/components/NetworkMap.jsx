@@ -59,13 +59,7 @@ const NetworkMap = ({ network, showLines = true }) => {
         })
       )}
 
-      {/* Planning phase faint dashes */}
-      {!showLines && segments.map((seg, i) => {
-        const a = pos[seg.from_station_id], b = pos[seg.to_station_id];
-        if (!a || !b) return null;
-        return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="rgba(255,255,255,0.05)" strokeWidth="2" strokeLinecap="round" strokeDasharray="4 6" />;
-      })}
-
+      
       {/* Station markers */}
       {stations.map(s => {
         const sp = pos[s.id];
