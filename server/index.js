@@ -84,7 +84,7 @@ app.post('/api/session', (req, res, next) => {
     if (!user) return res.status(401).json({ error: info?.message || 'Invalid credentials.' });
     req.login(user, (loginErr) => {
       if (loginErr) return next(loginErr);
-      res.status(201).json({ id: user.id, username: user.username });
+      res.status(200).json({ id: user.id, username: user.username });
     });
   })(req, res, next);
 });

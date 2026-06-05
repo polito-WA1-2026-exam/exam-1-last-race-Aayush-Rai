@@ -123,11 +123,16 @@ const PlanningPhase = ({ network, gameCtx, onSubmit, submitting }) => {
               Your route
             </p>
 
-            {route.length === 0 ? (
-              <p style={{ fontSize:'0.84rem', color:'var(--text-muted)', padding:'0.5rem 0' }}>
-                Click a segment starting from{' '}
-                <strong style={{ color:'var(--accent)' }}>{startStation.name}</strong>
-              </p>
+           {route.length === 0 ? (
+  <div style={{ padding:'0.5rem 0' }}>
+    <p style={{ fontSize:'0.84rem', color:'var(--text-muted)', marginBottom:'0.5rem' }}>
+      Click a <span style={{ color:'var(--accent)', fontWeight:600 }}>highlighted segment</span> in the list below that starts from{' '}
+      <strong style={{ color:'var(--text-primary)' }}>{startStation.name}</strong>
+    </p>
+    <div style={{ fontSize:'0.78rem', color:'var(--text-muted)', background:'var(--bg-dark)', padding:'0.5rem 0.75rem', borderRadius:'var(--r-sm)', lineHeight:1.6 }}>
+      💡 Only segments connected to your last station are highlighted
+    </div>
+  </div>
             ) : (
               <div style={{ fontSize:'0.82rem', lineHeight:2, maxHeight:160, overflowY:'auto' }}>
                 {route.map((id, i) => (
@@ -178,45 +183,73 @@ const PlanningPhase = ({ network, gameCtx, onSubmit, submitting }) => {
           </div>
 
           {/* Segment list */}
-          <div>
-            <p style={{ fontSize:'0.68rem', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--text-muted)', fontFamily:'var(--font-display)', marginBottom:'0.5rem' }}>
-              All connections ({segments.length})
-            </p>
-            <div style={{ display:'flex', flexDirection:'column', gap:'0.35rem', maxHeight:380, overflowY:'auto', paddingRight:2 }}>
-              {segments.map((seg, i) => {
-                const used      = usedSegments.has(segKey(seg));
-                const available = canUse(seg);
-                return (
-                  <div
-                    key={i}
-                    className={`seg-item ${available ? 'available' : 'disabled'}`}
-                    onClick={() => handleSegClick(seg)}
-                    style={{ opacity: used ? 0.45 : 1 }}>
-                    <span style={{
-                      color: used ? 'var(--accent)' : 'var(--text-secondary)',
-                      textDecoration: used ? 'line-through' : 'none',
-                    }}>
-                      {seg.from_station_name}
-                    </span>
-                    <span style={{ color:'var(--border-bright)', fontSize:'0.7rem', flexShrink:0, margin:'0 4px' }}>
-                      ——
-                    </span>
-                    <span style={{
-                      color: used ? 'var(--accent)' : 'var(--text-secondary)',
-                      textDecoration: used ? 'line-through' : 'none',
-                      textAlign:'right',
-                    }}>
-                      {seg.to_station_name}
-                    </span>
-                    {/* Tick shown when segment has been used */}
-                    {used && (
-                      <span style={{ marginLeft:6, fontSize:'0.7rem', color:'var(--accent)', flexShrink:0 }}>✓</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+         {/* Segment list */}
+<div>
+  <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'0.5rem' }}>
+    <p style={{ fontSize:'0.68rem', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--text-muted)', fontFamily:'var(--font-display)', margin:0 }}>
+      All connections ({segments.length})
+    </p>
+    <p style={{ fontSize:'0.68rem', color:'var(--accent)', fontFamily:'var(--font-display)', margin:0 }}>
+      ↑ highlighted = clickable
+    </p>
+  </div>
+  <div style={{ display:'flex', flexDirection:'column', gap:'0.35rem', maxHeight:380, overflowY:'auto', paddingRight:2 }}>
+    {segments.map((seg, i) => {
+      const used      = usedSegments.has(segKey(seg));
+      const available = canUse(seg);
+      return (
+        <div
+          key={i}
+          onClick={() => handleSegClick(seg)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0.6rem 0.9rem',
+            borderRadius: 'var(--r-sm)',
+            fontSize: '0.84rem',
+            transition: 'all 0.12s',
+            userSelect: 'none',
+            cursor: available ? 'pointer' : 'default',
+            // Available = bright accent border, glowing background
+            background: available
+              ? 'rgba(200,255,0,0.08)'
+              : used
+              ? 'rgba(255,255,255,0.02)'
+              : 'var(--bg-card)',
+            border: available
+              ? '1px solid rgba(200,255,0,0.5)'
+              : used
+              ? '1px solid rgba(255,255,255,0.05)'
+              : '1px solid var(--border)',
+            opacity: used ? 0.4 : 1,
+            boxShadow: available ? '0 0 8px rgba(200,255,0,0.1)' : 'none',
+          }}>
+          <span style={{
+            color: available ? 'var(--text-primary)' : used ? 'var(--text-muted)' : 'var(--text-secondary)',
+            fontWeight: available ? 600 : 400,
+            textDecoration: used ? 'line-through' : 'none',
+          }}>
+            {seg.from_station_name}
+          </span>
+          <span style={{ color: available ? 'var(--accent)' : 'var(--border-bright)', fontSize:'0.7rem', flexShrink:0, margin:'0 6px' }}>
+            {available ? '●—●' : '—'}
+          </span>
+          <span style={{
+            color: available ? 'var(--text-primary)' : used ? 'var(--text-muted)' : 'var(--text-secondary)',
+            fontWeight: available ? 600 : 400,
+            textDecoration: used ? 'line-through' : 'none',
+            textAlign: 'right',
+          }}>
+            {seg.to_station_name}
+          </span>
+          {used && <span style={{ marginLeft:6, fontSize:'0.7rem', color:'var(--success)', flexShrink:0 }}>✓</span>}
+          {available && !used && <span style={{ marginLeft:6, fontSize:'0.7rem', color:'var(--accent)', flexShrink:0 }}>tap</span>}
+        </div>
+      );
+    })}
+  </div>
+</div>
 
         </div>
       </div>
