@@ -3,13 +3,18 @@ import NetworkMap   from '../../components/NetworkMap';
 import useCountdown from '../../hooks/useCountdown';
 
 const PlanningPhase = ({ network, gameCtx, onSubmit, submitting }) => {
-  const [route, setRoute] = useState([]);
+  const [route, setRoute]               = useState([]);
+  const [usedSegments, setUsedSegments] = useState(new Set());
+
   const { startStation, endStation } = gameCtx;
 
+  // Auto-submit with whatever route is built when the timer expires
   const handleExpire = useCallback(() => onSubmit(route), [route, onSubmit]);
   const { formatted, isExpired, pct } = useCountdown(90, handleExpire);
+
   const timerColor = pct > 50 ? 'var(--success)' : pct > 20 ? 'var(--warning)' : 'var(--danger)';
 
+  // Deduplicated segment list (each undirected pair shown once)
   const segments = [];
   const seen = new Set();
   for (const s of (network.planningSegments ?? network.segments)) {
@@ -20,7 +25,12 @@ const PlanningPhase = ({ network, gameCtx, onSubmit, submitting }) => {
   const stationName = id => network.stations.find(s => s.id === id)?.name ?? id;
   const last = route[route.length - 1];
 
+  // Segment key — undirected, same regardless of travel direction
+  const segKey = (seg) => [seg.from_station_id, seg.to_station_id].sort().join('-');
+
+  // A segment is available if it connects to the last station AND hasn't been used yet
   const canUse = (seg) => {
+    if (usedSegments.has(segKey(seg))) return false;
     if (route.length === 0)
       return seg.from_station_id === startStation.id || seg.to_station_id === startStation.id;
     return seg.from_station_id === last || seg.to_station_id === last;
@@ -28,20 +38,47 @@ const PlanningPhase = ({ network, gameCtx, onSubmit, submitting }) => {
 
   const handleSegClick = (seg) => {
     if (isExpired || submitting || !canUse(seg)) return;
+
+    const key = segKey(seg);
+
     if (route.length === 0) {
-      const next = seg.from_station_id === startStation.id ? seg.to_station_id : seg.from_station_id;
+      const next = seg.from_station_id === startStation.id
+        ? seg.to_station_id : seg.from_station_id;
       setRoute([startStation.id, next]);
+      setUsedSegments(prev => new Set([...prev, key]));
     } else {
-      const next = seg.from_station_id === last ? seg.to_station_id : seg.from_station_id;
+      const next = seg.from_station_id === last
+        ? seg.to_station_id : seg.from_station_id;
       setRoute(prev => [...prev, next]);
+      setUsedSegments(prev => new Set([...prev, key]));
     }
+  };
+
+  // Undo the last step — also removes the segment from usedSegments
+  const handleUndo = () => {
+    if (route.length === 0) return;
+    if (route.length === 1) {
+      setRoute([]);
+      setUsedSegments(new Set());
+      return;
+    }
+    const from = route[route.length - 2];
+    const to   = route[route.length - 1];
+    const key  = [from, to].sort().join('-');
+    setRoute(r => r.slice(0, -1));
+    setUsedSegments(prev => {
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
   };
 
   const routeReachesEnd = route[route.length - 1] === endStation.id;
 
   return (
     <div className="fade-up">
-      {/* Header */}
+
+      {/* ── Header ── */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'1.5rem', flexWrap:'wrap', gap:'1rem' }}>
         <div>
           <p className="tag-label" style={{ marginBottom:'0.35rem' }}>Phase 2 of 4 — Planning</p>
@@ -55,9 +92,11 @@ const PlanningPhase = ({ network, gameCtx, onSubmit, submitting }) => {
           </p>
         </div>
 
-        {/* Timer */}
+        {/* Countdown timer */}
         <div style={{ textAlign:'center', padding:'1rem 1.5rem', background:'var(--bg-card)', border:`1px solid ${timerColor}44`, borderRadius:'var(--r-md)', minWidth:130 }}>
-          <div style={{ fontSize:'0.68rem', letterSpacing:'0.12em', textTransform:'uppercase', fontFamily:'var(--font-display)', color:'var(--text-muted)', marginBottom:'0.35rem' }}>Time left</div>
+          <div style={{ fontSize:'0.68rem', letterSpacing:'0.12em', textTransform:'uppercase', fontFamily:'var(--font-display)', color:'var(--text-muted)', marginBottom:'0.35rem' }}>
+            Time left
+          </div>
           <div style={{ fontFamily:'var(--font-display)', fontWeight:700, fontSize:'2.8rem', color:timerColor, lineHeight:1, transition:'color 0.5s', textShadow:`0 0 20px ${timerColor}66` }}>
             {formatted}
           </div>
@@ -67,31 +106,45 @@ const PlanningPhase = ({ network, gameCtx, onSubmit, submitting }) => {
         </div>
       </div>
 
-      {/* Two-column layout */}
+      {/* ── Two-column layout: map + sidebar ── */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 320px', gap:'1.25rem', alignItems:'start' }}>
+
+        {/* Map — no line colours in planning phase */}
         <div style={{ border:'1px solid var(--border-bright)', borderRadius:'var(--r-lg)', overflow:'hidden', boxShadow:'0 4px 24px rgba(0,0,0,0.4)' }}>
           <NetworkMap network={network} showLines={false} />
         </div>
 
+        {/* Sidebar */}
         <div style={{ display:'flex', flexDirection:'column', gap:'0.85rem' }}>
-          {/* Route builder */}
+
+          {/* Route builder card */}
           <div className="card-raised">
-            <p style={{ fontSize:'0.68rem', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--text-muted)', fontFamily:'var(--font-display)', marginBottom:'0.7rem' }}>Your route</p>
+            <p style={{ fontSize:'0.68rem', letterSpacing:'0.12em', textTransform:'uppercase', color:'var(--text-muted)', fontFamily:'var(--font-display)', marginBottom:'0.7rem' }}>
+              Your route
+            </p>
 
             {route.length === 0 ? (
               <p style={{ fontSize:'0.84rem', color:'var(--text-muted)', padding:'0.5rem 0' }}>
-                Click a segment starting from <strong style={{ color:'var(--accent)' }}>{startStation.name}</strong>
+                Click a segment starting from{' '}
+                <strong style={{ color:'var(--accent)' }}>{startStation.name}</strong>
               </p>
             ) : (
               <div style={{ fontSize:'0.82rem', lineHeight:2, maxHeight:160, overflowY:'auto' }}>
                 {route.map((id, i) => (
                   <span key={i}>
-                    {i > 0 && <span style={{ color:'var(--text-muted)', margin:'0 4px', fontSize:'0.75rem' }}>→</span>}
+                    {i > 0 && (
+                      <span style={{ color:'var(--text-muted)', margin:'0 4px', fontSize:'0.75rem' }}>→</span>
+                    )}
                     <span style={{
-                      padding:'0.1rem 0.5rem', borderRadius:4,
-                      background: id===endStation.id ? 'rgba(200,255,0,0.12)' : id===startStation.id ? 'rgba(255,255,255,0.06)' : 'transparent',
-                      color: id===endStation.id ? 'var(--accent)' : id===startStation.id ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      fontWeight: (id===startStation.id||id===endStation.id) ? 700 : 400,
+                      padding: '0.1rem 0.5rem',
+                      borderRadius: 4,
+                      background: id === endStation.id   ? 'rgba(200,255,0,0.12)'
+                                : id === startStation.id ? 'rgba(255,255,255,0.06)'
+                                : 'transparent',
+                      color: id === endStation.id   ? 'var(--accent)'
+                           : id === startStation.id ? 'var(--text-primary)'
+                           : 'var(--text-secondary)',
+                      fontWeight: (id === startStation.id || id === endStation.id) ? 700 : 400,
                     }}>
                       {stationName(id)}
                     </span>
@@ -100,6 +153,7 @@ const PlanningPhase = ({ network, gameCtx, onSubmit, submitting }) => {
               </div>
             )}
 
+            {/* Destination reached indicator */}
             {routeReachesEnd && (
               <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginTop:'0.5rem', padding:'0.4rem 0.6rem', background:'rgba(200,255,0,0.08)', border:'1px solid rgba(200,255,0,0.25)', borderRadius:'var(--r-sm)', fontSize:'0.8rem', color:'var(--accent)' }}>
                 ✓ Route reaches destination!
@@ -107,8 +161,17 @@ const PlanningPhase = ({ network, gameCtx, onSubmit, submitting }) => {
             )}
 
             <div style={{ display:'flex', gap:'0.5rem', marginTop:'0.85rem' }}>
-              <button className="btn btn-ghost btn-sm" onClick={() => setRoute(r => r.slice(0,-1))} disabled={route.length===0||isExpired}>↩ Undo</button>
-              <button className="btn btn-primary btn-sm" style={{ flex:1 }} onClick={() => onSubmit(route)} disabled={submitting||route.length<2||isExpired}>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={handleUndo}
+                disabled={route.length === 0 || isExpired}>
+                ↩ Undo
+              </button>
+              <button
+                className="btn btn-primary btn-sm"
+                style={{ flex:1 }}
+                onClick={() => onSubmit(route)}
+                disabled={submitting || route.length < 2 || isExpired}>
                 {submitting ? 'Submitting…' : 'Submit route'}
               </button>
             </div>
@@ -120,15 +183,41 @@ const PlanningPhase = ({ network, gameCtx, onSubmit, submitting }) => {
               All connections ({segments.length})
             </p>
             <div style={{ display:'flex', flexDirection:'column', gap:'0.35rem', maxHeight:380, overflowY:'auto', paddingRight:2 }}>
-              {segments.map((seg, i) => (
-                <div key={i} className={`seg-item ${canUse(seg) ? 'available' : 'disabled'}`} onClick={() => handleSegClick(seg)}>
-                  <span style={{ color:'var(--text-secondary)' }}>{seg.from_station_name}</span>
-                  <span style={{ color:'var(--border-bright)', fontSize:'0.7rem', flexShrink:0, margin:'0 4px' }}>——</span>
-                  <span style={{ color:'var(--text-secondary)', textAlign:'right' }}>{seg.to_station_name}</span>
-                </div>
-              ))}
+              {segments.map((seg, i) => {
+                const used      = usedSegments.has(segKey(seg));
+                const available = canUse(seg);
+                return (
+                  <div
+                    key={i}
+                    className={`seg-item ${available ? 'available' : 'disabled'}`}
+                    onClick={() => handleSegClick(seg)}
+                    style={{ opacity: used ? 0.45 : 1 }}>
+                    <span style={{
+                      color: used ? 'var(--accent)' : 'var(--text-secondary)',
+                      textDecoration: used ? 'line-through' : 'none',
+                    }}>
+                      {seg.from_station_name}
+                    </span>
+                    <span style={{ color:'var(--border-bright)', fontSize:'0.7rem', flexShrink:0, margin:'0 4px' }}>
+                      ——
+                    </span>
+                    <span style={{
+                      color: used ? 'var(--accent)' : 'var(--text-secondary)',
+                      textDecoration: used ? 'line-through' : 'none',
+                      textAlign:'right',
+                    }}>
+                      {seg.to_station_name}
+                    </span>
+                    {/* Tick shown when segment has been used */}
+                    {used && (
+                      <span style={{ marginLeft:6, fontSize:'0.7rem', color:'var(--accent)', flexShrink:0 }}>✓</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
+
         </div>
       </div>
     </div>
